@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Kanban",
-  "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "productName": "Kanban Desktop",
+  "version": "0.0.1",
+  "identifier": "com.ericksontest.kanban",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -13,8 +13,11 @@
     "windows": [
       {
         "title": "Kanban",
-        "width": 800,
-        "height": 600,
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1100,
+        "minHeight": 680,
+        "center": true,
         "resizable": true,
         "fullscreen": false
       }

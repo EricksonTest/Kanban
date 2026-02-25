@@ -3,6 +3,7 @@ import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { Card, Status, FilterState } from "./types";
 import { mockCards } from "./mockData";
+import { exportBoardJsonFile, importBoardJsonFile } from "../desktop/fileDialogs";
 import { loadBoard, parseBoardPayload, saveBoard } from "../desktop/storage";
 import { TopBar } from "./components/TopBar";
 import { SecondaryBar } from "./components/SecondaryBar";
@@ -183,45 +184,40 @@ function AppContent() {
       null,
       2,
     );
-    const dataBlob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${boardName.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    toast.success("Board exported successfully");
+
+    void exportBoardJsonFile(boardName, dataStr)
+      .then((exported) => {
+        if (exported) {
+          toast.success("Board exported successfully");
+        }
+      })
+      .catch(() => {
+        toast.error("Failed to export board.");
+      });
   };
 
   const handleImport = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "application/json";
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          try {
-            const payload = JSON.parse(event.target?.result as string);
-            const importedBoard = parseBoardPayload(payload, boardName);
+    void importBoardJsonFile()
+      .then((fileText) => {
+        if (!fileText) {
+          return;
+        }
 
-            if (!importedBoard) {
-              throw new Error("Invalid board payload");
-            }
+        const payload = JSON.parse(fileText);
+        const importedBoard = parseBoardPayload(payload, boardName);
 
-            setBoardName(importedBoard.boardName);
-            setCards(importedBoard.cards);
-            setSelectedCard(null);
-            toast.success("Board imported successfully");
-          } catch (error) {
-            toast.error("Failed to import board. Invalid file format.");
-          }
-        };
-        reader.readAsText(file);
-      }
-    };
-    input.click();
+        if (!importedBoard) {
+          throw new Error("Invalid board payload");
+        }
+
+        setBoardName(importedBoard.boardName);
+        setCards(importedBoard.cards);
+        setSelectedCard(null);
+        toast.success("Board imported successfully");
+      })
+      .catch(() => {
+        toast.error("Failed to import board. Invalid file format.");
+      });
   };
 
   const handleClearFilters = () => {

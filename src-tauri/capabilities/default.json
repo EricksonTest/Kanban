@@ -7,13 +7,16 @@
   ],
   "permissions": [
     "core:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
+    "fs:allow-rename",
     {
       "identifier": "fs:scope",
       "allow": [
         {
-          "path": "$APPDATA/board.json"
+          "path": "$APPDATA/board*.json"
         }
       ]
     }
