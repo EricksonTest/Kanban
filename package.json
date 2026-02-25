@@ -1,7 +1,9 @@
 {
-  "name": "@figma/my-make-file",
+  "name": "royal-kanban",
   "private": true,
   "version": "0.0.1",
+  "description": "Royal Kanban desktop app",
+  "author": "Erickson",
   "type": "module",
   "scripts": {
     "build": "vite build",
