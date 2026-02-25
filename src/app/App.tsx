@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
-import { Card, Status, Priority, FilterState } from "./types";
+import { Card, Status, FilterState } from "./types";
 import { mockCards } from "./mockData";
+import { loadBoard, parseBoardPayload, saveBoard } from "../desktop/storage";
 import { TopBar } from "./components/TopBar";
 import { SecondaryBar } from "./components/SecondaryBar";
 import { KanbanBoard } from "./components/KanbanBoard";
@@ -10,10 +11,14 @@ import { DetailDrawer } from "./components/DetailDrawer";
 import { QuickAddDialog } from "./components/QuickAddDialog";
 import { toast, Toaster } from "sonner";
 
+const DEFAULT_BOARD_NAME = "Sprint Regression";
+
 function AppContent() {
-  const [boardName, setBoardName] = useState("Sprint Regression");
+  const [boardName, setBoardName] = useState(DEFAULT_BOARD_NAME);
   const [cards, setCards] = useState<Card[]>(mockCards);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+  const [hasLoadedBoard, setHasLoadedBoard] = useState(false);
+  const saveTimeoutRef = useRef<number | null>(null);
   const [quickAddDialog, setQuickAddDialog] = useState<{
     open: boolean;
     status: Status;
@@ -72,6 +77,62 @@ function AppContent() {
   const doneCount = filteredCards.filter((c) => c.status === "done").length;
   const blockedCount = filteredCards.filter((c) => c.status === "blocked").length;
 
+  // Load saved board data on startup (desktop adapter currently uses localStorage).
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrateBoard = async () => {
+      try {
+        const savedBoard = await loadBoard(DEFAULT_BOARD_NAME);
+
+        if (cancelled || !savedBoard) {
+          return;
+        }
+
+        setBoardName(savedBoard.boardName);
+        setCards(savedBoard.cards);
+      } catch {
+        if (!cancelled) {
+          toast.error("Failed to load saved board. Using defaults.");
+        }
+      } finally {
+        if (!cancelled) {
+          setHasLoadedBoard(true);
+        }
+      }
+    };
+
+    void hydrateBoard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Debounced autosave to avoid losing local changes between restarts.
+  useEffect(() => {
+    if (!hasLoadedBoard) {
+      return;
+    }
+
+    if (saveTimeoutRef.current !== null) {
+      window.clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = window.setTimeout(() => {
+      void saveBoard({ boardName, cards }).catch(() => {
+        toast.error("Failed to save board locally.");
+      });
+    }, 300);
+
+    return () => {
+      if (saveTimeoutRef.current !== null) {
+        window.clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+    };
+  }, [boardName, cards, hasLoadedBoard]);
+
   // Handlers
   const handleQuickAdd = (title: string, status: Status = "not-started") => {
     const newCard: Card = {
@@ -112,7 +173,16 @@ function AppContent() {
   };
 
   const handleExport = () => {
-    const dataStr = JSON.stringify(cards, null, 2);
+    const dataStr = JSON.stringify(
+      {
+        schemaVersion: 1,
+        boardName,
+        cards,
+        exportedAt: Date.now(),
+      },
+      null,
+      2,
+    );
     const dataBlob = new Blob([dataStr], { type: "application/json" });
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement("a");
@@ -133,8 +203,16 @@ function AppContent() {
         const reader = new FileReader();
         reader.onload = (event) => {
           try {
-            const importedCards = JSON.parse(event.target?.result as string);
-            setCards(importedCards);
+            const payload = JSON.parse(event.target?.result as string);
+            const importedBoard = parseBoardPayload(payload, boardName);
+
+            if (!importedBoard) {
+              throw new Error("Invalid board payload");
+            }
+
+            setBoardName(importedBoard.boardName);
+            setCards(importedBoard.cards);
+            setSelectedCard(null);
             toast.success("Board imported successfully");
           } catch (error) {
             toast.error("Failed to import board. Invalid file format.");
